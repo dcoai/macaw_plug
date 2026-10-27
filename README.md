@@ -18,5 +18,5 @@ plug Macaw.Plug.SecurityHeaders
 Part of [Macaw](https://gitlab.conet.yarina.org/dco-tek/macaw_compose), whose spec lists it among the host libraries (spec/00 §4). Released by git tag:
 
 ```elixir
-{:macaw_plug, git: "git@gitlab.conet.yarina.org:dco-tek/macaw_plug.git", tag: "v0.1.0"}
+{:macaw_plug, git: "git@gitlab.conet.yarina.org:dco-tek/macaw_plug.git", tag: "v0.1.2"}
 ```

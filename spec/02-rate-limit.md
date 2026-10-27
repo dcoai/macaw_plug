@@ -1,5 +1,7 @@
 # 02 — Rate limiting {#plug-rate}
 
+<!-- surfex: class chapter-intro -->
+
 `Macaw.Plug.RateLimit` is one limiter for every request rate a host enforces: an API's, a form's, a page's. It is exio's generic cell rate algorithm, generalized from exio's fixed API limit to named limiters keyed by whatever the caller names (macaw_compose#34, #44). It replaced three algorithms in three projects (exio's GCRA and two fixed windows).
 
 ## 1. The algorithm {#plug-rate-gcra}

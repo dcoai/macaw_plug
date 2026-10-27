@@ -1,7 +1,7 @@
 defmodule Macaw.Plug.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
 
   def project do
     [
@@ -23,7 +23,9 @@ defmodule Macaw.Plug.MixProject do
     [
       {:plug, "~> 1.16"},
       {:telemetry, "~> 1.2"},
-      {:stream_data, "~> 1.1", only: :test}
+      {:stream_data, "~> 1.1", only: :test},
+      # Spec, tests and code kept aligned (macaw_compose spec/00 §4.1); dev/test only.
+      {:surfex, "~> 0.10.0", only: [:dev, :test], runtime: false}
     ]
   end
 end

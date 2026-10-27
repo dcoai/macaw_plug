@@ -1,5 +1,7 @@
 # 01 — Client address {#plug-client-ip}
 
+<!-- surfex: class chapter-intro -->
+
 Behind a reverse proxy, the socket's peer is the proxy, and the client's address arrives in `X-Forwarded-For`, which anyone can write. `Macaw.Plug.ClientIp` decides which entry to believe, from the proxies the host declares, and `Macaw.Plug.Ip` does the address arithmetic. Both start from macaw's and exio's copies of the same rule (macaw_compose#34, #43).
 
 ## 1. Addresses and CIDRs {#plug-ip}

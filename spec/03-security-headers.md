@@ -1,5 +1,7 @@
 # 03 — Security headers {#plug-headers}
 
+<!-- surfex: class chapter-intro -->
+
 `Macaw.Plug.SecurityHeaders` writes a strict Content-Security-Policy and the standard security headers on every response. It comes from macaw's `PageScripts` (the closed policy and script hashing) and Snow's `SecurityHeaders` (the standard headers, HSTS over https), and replaces Phoenix's `put_secure_browser_headers` (macaw_compose#34, #45).
 
 ## 1. The default policy {#plug-headers-policy}
@@ -47,7 +49,7 @@ init(csp: ["img-src"]) raises ArgumentError matching `csp: "img-src"`
 - `Macaw.Plug.SecurityHeaders.put_script_hash/2` allows one inline script on this response: it adds the body's hash to the response's list. A hash already in the list is not added again; the list keeps the order hashes were first added.
 - **The policy is written just before the response is sent** (§4), so a controller that renders an inline script adds its hash after the plug has run, and the hash reaches the policy.
 - The hashes are added to `script-src`, after its value: `script-src 'self' 'sha256-…' 'sha256-…'`.
-- The list starts empty when the plug runs, so a hash put on the conn **before** the plug runs is dropped.
+- A hash put on the conn **before** the plug runs is kept too (§4, macaw_compose#69).
 
 ```test:headers-hash-vector
 hash("alert(1)") is "'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='" (openssl dgst -sha256 -binary | base64)

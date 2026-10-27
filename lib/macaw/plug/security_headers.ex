@@ -113,11 +113,24 @@ defmodule Macaw.Plug.SecurityHeaders do
   @spec policy(keyword(String.t()), [String.t()]) :: String.t()
   def policy(directives \\ @directives, hashes \\ []) do
     directives
-    |> Keyword.update(:script_src, Enum.join(hashes, " "), &Enum.join([&1 | hashes], " "))
+    |> add_hashes(hashes)
     |> Enum.map_join("; ", fn {k, v} ->
       "#{k |> Atom.to_string() |> String.replace("_", "-")} #{v}"
     end)
   end
+
+  # Without hashes the directives render as given: a script-src they lack is
+  # not invented (an empty one would forbid every script).
+  defp add_hashes(directives, []), do: directives
+
+  defp add_hashes(directives, hashes),
+    do:
+      Keyword.update(
+        directives,
+        :script_src,
+        Enum.join(hashes, " "),
+        &Enum.join([&1 | hashes], " ")
+      )
 
   # Overrides replace a directive where it stands, so the policy keeps one
   # order whatever is changed; new directives follow the defaults.
