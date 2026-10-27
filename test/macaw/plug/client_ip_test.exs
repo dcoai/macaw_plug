@@ -108,6 +108,23 @@ defmodule Macaw.Plug.ClientIpTest do
     end
   end
 
+  describe "a dynamic list with a bad entry (#69)" do
+    test "the bad entry is dropped and reported; the request is served" do
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [
+          [:macaw_plug, :client_ip, :bad_proxy_entry]
+        ])
+
+      :persistent_term.put({__MODULE__, :proxies}, ["10.0.0.0/8", "not-a-cidr"])
+      opts = [trusted_proxies: {__MODULE__, :proxies, []}]
+
+      assert call({10, 0, 0, 5}, "203.0.113.9", opts).remote_ip == {203, 0, 113, 9}
+
+      assert_receive {[:macaw_plug, :client_ip, :bad_proxy_entry], ^ref, %{count: 1},
+                      %{entry: "not-a-cidr"}}
+    end
+  end
+
   def proxies, do: :persistent_term.get({__MODULE__, :proxies})
 
   describe "the default logger" do

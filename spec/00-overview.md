@@ -36,10 +36,3 @@ plug Macaw.Plug.SecurityHeaders
 ```
 
 `Macaw.Plug.RateLimit.Table` is started once in the host's supervision tree before any limiter is checked ([02 §5](02-rate-limit.md#plug-rate-table)). `Macaw.Plug.SecurityHeaders` replaces Phoenix's `put_secure_browser_headers`.
-
-## 5. Known gaps {#plug-gaps}
-
-Found while writing this spec from the code (v0.1.0); each section states what the code does, and these are open for the owner's decision:
-- **HSTS cannot be removed through `headers:`.** `strict-transport-security` is written after the `headers:` map, so over https an entry for it in `headers:` (a value or `nil`) has no effect; only `hsts:` changes it ([03 §5](03-security-headers.md#plug-headers-hsts)). The moduledoc says every header, HSTS included, can be replaced or removed with `headers:`.
-- **A script hash added before the plug runs is dropped.** `call/2` resets the hash list, so `put_script_hash/2` works only after `Macaw.Plug.SecurityHeaders` has run on the conn ([03 §3](03-security-headers.md#plug-headers-hashes)).
-- **A dynamic trusted-proxy list is checked on every request.** A malformed entry returned by the `{module, function, args}` raises during the request, not at `init/1` ([01 §3](01-client-ip.md#plug-client-ip-config)).

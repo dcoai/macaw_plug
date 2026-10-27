@@ -76,16 +76,19 @@ defmodule Macaw.Plug.SecurityHeaders do
 
   @impl true
   def call(conn, config) do
+    # Hashes added before this plug ran are kept, not reset (#69).
     conn
-    |> put_private(:macaw_plug_script_hashes, [])
+    |> put_private(
+      :macaw_plug_script_hashes,
+      Map.get(conn.private, :macaw_plug_script_hashes, [])
+    )
     |> register_before_send(fn conn ->
       conn
       |> put_resp_header(
         "content-security-policy",
         policy(config.directives, conn.private.macaw_plug_script_hashes)
       )
-      |> put_headers(config.headers)
-      |> put_hsts(config.hsts)
+      |> put_headers(headers(conn, config))
     end)
   end
 
@@ -130,8 +133,14 @@ defmodule Macaw.Plug.SecurityHeaders do
     end)
   end
 
-  defp put_hsts(%Plug.Conn{scheme: :https} = conn, value) when is_binary(value),
-    do: put_resp_header(conn, "strict-transport-security", value)
+  # HSTS is one of the headers (#69): over https it starts from `hsts:`, and
+  # `headers:` replaces or removes it like any other. Over http it is never
+  # sent, since browsers ignore it there.
+  defp headers(%Plug.Conn{scheme: :https}, %{headers: headers, hsts: hsts}) when is_binary(hsts),
+    do: Map.merge(%{"strict-transport-security" => hsts}, headers)
 
-  defp put_hsts(conn, _), do: conn
+  defp headers(%Plug.Conn{scheme: :https}, %{headers: headers}), do: headers
+
+  defp headers(_conn, %{headers: headers}),
+    do: Map.put(headers, "strict-transport-security", nil)
 end

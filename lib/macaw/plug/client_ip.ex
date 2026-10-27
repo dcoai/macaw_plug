@@ -34,6 +34,7 @@ defmodule Macaw.Plug.ClientIp do
   alias Macaw.Plug.Ip
 
   @event [:macaw_plug, :client_ip, :untrusted_forward]
+  @bad_entry [:macaw_plug, :client_ip, :bad_proxy_entry]
 
   @impl true
   def init(opts) do
@@ -46,7 +47,7 @@ defmodule Macaw.Plug.ClientIp do
   @impl true
   def call(conn, {:static, trusted}), do: put_client(conn, trusted)
 
-  def call(conn, {:dynamic, {m, f, a}}), do: put_client(conn, cidrs!(apply(m, f, a)))
+  def call(conn, {:dynamic, {m, f, a}}), do: put_client(conn, dynamic_cidrs(apply(m, f, a)))
 
   @doc """
   The client address for a peer, its `X-Forwarded-For` entries (left to
@@ -84,35 +85,47 @@ defmodule Macaw.Plug.ClientIp do
   def peer(conn), do: Map.get(conn.private, :macaw_plug_peer, conn.remote_ip)
 
   @doc """
-  Logs an untrusted forward at most once per `interval_ms` (default one
-  minute) on this node. Returns the telemetry handler's attach result.
+  Logs an untrusted forward, and a bad entry in a dynamic trusted-proxy
+  list, each at most once per `interval_ms` (default one minute) on this
+  node. Returns the telemetry handler's attach result.
   """
   @spec attach_default_logger(pos_integer()) :: :ok | {:error, :already_exists}
   def attach_default_logger(interval_ms \\ 60_000) do
     # The monotonic clock can be negative, so "never logged" is an interval
-    # before now, not a fixed sentinel.
-    last = :atomics.new(1, signed: true)
-    :atomics.put(last, 1, System.monotonic_time(:millisecond) - interval_ms)
+    # before now, not a fixed sentinel. One slot per event.
+    last = :atomics.new(2, signed: true)
+    never = System.monotonic_time(:millisecond) - interval_ms
+    :atomics.put(last, 1, never)
+    :atomics.put(last, 2, never)
 
-    :telemetry.attach(
+    :telemetry.attach_many(
       "macaw-plug-client-ip-logger",
-      @event,
-      &__MODULE__.log_untrusted/4,
+      [@event, @bad_entry],
+      &__MODULE__.log/4,
       %{last: last, interval: interval_ms}
     )
   end
 
   @doc false
-  def log_untrusted(_event, _measurements, %{peer: peer}, %{last: last, interval: interval}) do
-    now = System.monotonic_time(:millisecond)
-    before = :atomics.get(last, 1)
+  def log(@event, _measurements, %{peer: peer}, config) do
+    once(config, 1, fn ->
+      "X-Forwarded-For from untrusted peer #{Ip.to_string(peer)}; " <>
+        "if it is your proxy, add it to trusted_proxies"
+    end)
+  end
 
-    if now - before >= interval and :atomics.compare_exchange(last, 1, before, now) == :ok do
-      Logger.warning(
-        "X-Forwarded-For from untrusted peer #{Ip.to_string(peer)}; " <>
-          "if it is your proxy, add it to trusted_proxies"
-      )
-    end
+  def log(@bad_entry, _measurements, %{entry: entry, reason: reason}, config) do
+    once(config, 2, fn ->
+      "trusted_proxies: ignored #{inspect(entry)} (#{reason}); fix the list it came from"
+    end)
+  end
+
+  defp once(%{last: last, interval: interval}, slot, message) do
+    now = System.monotonic_time(:millisecond)
+    before = :atomics.get(last, slot)
+
+    if now - before >= interval and :atomics.compare_exchange(last, slot, before, now) == :ok,
+      do: Logger.warning(message.())
 
     :ok
   end
@@ -127,6 +140,27 @@ defmodule Macaw.Plug.ClientIp do
     %{conn | remote_ip: resolve(peer, forwarded, trusted)}
     |> Plug.Conn.put_private(:macaw_plug_peer, peer)
   end
+
+  # A dynamic list is read per request, so a bad entry can't fail at init/1.
+  # It is dropped and reported, and the request is served without it: a
+  # proxy list that can't be read must never take the site down, and an
+  # entry that can't be parsed can't be trusted (#69).
+  defp dynamic_cidrs(list) do
+    Enum.flat_map(list, fn entry ->
+      case parse_entry(entry) do
+        {:ok, cidr} ->
+          [cidr]
+
+        {:error, reason} ->
+          :telemetry.execute(@bad_entry, %{count: 1}, %{entry: entry, reason: reason})
+          []
+      end
+    end)
+  end
+
+  defp parse_entry({ip, prefix} = cidr) when is_tuple(ip) and is_integer(prefix), do: {:ok, cidr}
+  defp parse_entry(text) when is_binary(text), do: Ip.parse_cidr(text)
+  defp parse_entry(other), do: {:error, "#{inspect(other)} is not an address or a CIDR"}
 
   defp cidrs!(list) do
     Enum.map(list, fn

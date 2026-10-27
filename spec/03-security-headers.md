@@ -63,10 +63,13 @@ bodies "a()" then "b()" give "script-src 'self' <hash a()> <hash b()>;"
 
 ## 4. When the headers are written {#plug-headers-call}
 
-`Macaw.Plug.SecurityHeaders.init/1` takes `:csp` (§2), `:headers` (§6) and `:hsts` (§5). `Macaw.Plug.SecurityHeaders.call/2` starts the response's hash list empty and registers a `register_before_send` callback; nothing is written until the response is sent. Then, in this order:
-1. `content-security-policy`, from the directives and the hashes added by then;
-2. the standard headers (§6), with the host's replacements and removals;
-3. `strict-transport-security`, over https (§5).
+`Macaw.Plug.SecurityHeaders.init/1` takes `:csp` (§2), `:headers` (§6) and `:hsts` (§5). `Macaw.Plug.SecurityHeaders.call/2` keeps any hashes already added to the conn (`put_script_hash/2` may run before the plug, macaw_compose#69) and registers a `register_before_send` callback; nothing is written until the response is sent. Then, in this order:
+1. `content-security-policy`, from the directives and every hash added by then, before or after the plug ran;
+2. the headers: the standard headers (§6) and, over https, `strict-transport-security` (§5), with the host's replacements and removals (`headers:`) applied to all of them alike.
+
+```test:headers-hash-before-plug
+a hash added with put_script_hash/2 before the plug runs is in the policy's script-src
+```
 
 Each is written with `put_resp_header`, replacing any value of the same name a controller set earlier.
 
@@ -78,7 +81,11 @@ every response through the plug carries content-security-policy and the five sta
 
 Over https (`conn.scheme == :https`) the response carries `strict-transport-security`, `max-age=31536000` by default. Over http it carries none, since a browser ignores it there. Behind a TLS-terminating proxy, `conn.scheme` is https only if the host rewrites it (`Plug.RewriteOn`, say).
 
-`hsts:` replaces the value; a value that is not a string (`nil`, `false`) turns HSTS off. HSTS is written after the `headers:` map (§4), so over https an entry for `strict-transport-security` in `headers:` has no effect; `hsts:` is the one way to change it.
+`hsts:` sets the default value; a value that is not a string (`nil`, `false`) turns HSTS off. **HSTS is one of the headers** (macaw_compose#69): over https, an entry for `strict-transport-security` in `headers:` replaces it, and `nil` removes it, as for any header (§6). Over http it is never sent, whatever `headers:` says.
+
+```test:headers-hsts-via-headers
+over https, headers: %{"strict-transport-security" => nil} sends none, and => "max-age=60" sends max-age=60
+```
 
 ```test:headers-hsts
 over http there is no strict-transport-security; over https it is "max-age=31536000"; with hsts: nil there is none over https

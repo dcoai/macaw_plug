@@ -93,4 +93,26 @@ defmodule Macaw.Plug.SecurityHeadersTest do
                "script-src 'self' #{SecurityHeaders.hash("a()")} #{SecurityHeaders.hash("b()")};"
     end
   end
+
+  describe "gaps fixed in #69" do
+    test "HSTS is removed through headers:, like any header" do
+      conn = run([headers: %{"strict-transport-security" => nil}], & &1, :https)
+      assert header(conn, "strict-transport-security") == nil
+    end
+
+    test "HSTS is replaced through headers:" do
+      conn = run([headers: %{"strict-transport-security" => "max-age=60"}], & &1, :https)
+      assert header(conn, "strict-transport-security") == "max-age=60"
+    end
+
+    test "a script hash added before the plug runs is kept" do
+      conn =
+        conn(:get, "/")
+        |> SecurityHeaders.put_script_hash("early()")
+        |> SecurityHeaders.call(SecurityHeaders.init([]))
+        |> send_resp(200, "ok")
+
+      assert header(conn, "content-security-policy") =~ SecurityHeaders.hash("early()")
+    end
+  end
 end

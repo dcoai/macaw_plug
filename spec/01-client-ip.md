@@ -107,7 +107,11 @@ two x-forwarded-for headers, "198.51.100.7" then "203.0.113.9", behind a trusted
 `Macaw.Plug.ClientIp.init/1` takes `:trusted_proxies`:
 - **absent, it is `[]`: none trusted.** Every client is then its peer: behind a reverse proxy every visitor looks like the proxy, wrong but never spoofable (macaw_compose#34, owner decision);
 - **a static list** of CIDR strings or single addresses (§1.2), or `{address, prefix}` tuples taken as they are. It is parsed once, at `init/1`. A malformed string raises `ArgumentError` at `init/1`, `"trusted_proxies: "` followed by `Macaw.Plug.Ip.parse_cidr/1`'s message naming it; an entry of any other shape raises `"trusted_proxies: <entry> is not an address or a CIDR"`;
-- **`{module, function, args}`** (all three of the right types) returning such a list, called on **every request**, for a list that changes at runtime. Its result is parsed on every request, so a malformed entry it returns raises during that request.
+- **`{module, function, args}`** (all three of the right types) returning such a list, called on **every request**, for a list that changes at runtime. Its result is parsed on every request. **A malformed entry is dropped and reported, never raised** (macaw_compose#69): the event `[:macaw_plug, :client_ip, :bad_proxy_entry]` is emitted with `%{count: 1}` and `%{entry: entry, reason: reason}`, the default logger (§5.1) logs it, and the request is resolved against the remaining entries. A proxy list that can't be read must never take the site down, and an entry that can't be parsed can't be trusted.
+
+```test:client-ip-dynamic-bad-entry
+a dynamic list returning ["10.0.0.0/8", "not-a-cidr"] still resolves a request from 10.0.0.5 forwarding for 203.0.113.9 to 203.0.113.9, and emits bad_proxy_entry with entry "not-a-cidr"
+```
 
 ```test:client-ip-default-none
 init([]) trusts nothing: a request from 10.0.0.5 forwarding for 203.0.113.9 resolves to 10.0.0.5
@@ -144,7 +148,7 @@ a forwarded request from untrusted 198.51.100.7 emits the event with %{count: 1}
 
 ### 5.1 The default logger {#plug-client-ip-logger}
 
-`Macaw.Plug.ClientIp.attach_default_logger/1` attaches a telemetry handler (id `"macaw-plug-client-ip-logger"`, handler `Macaw.Plug.ClientIp.log_untrusted/4`) that logs the event as a warning naming the peer, `"X-Forwarded-For from untrusted peer <peer>; if it is your proxy, add it to trusted_proxies"`:
+`Macaw.Plug.ClientIp.attach_default_logger/1` attaches a telemetry handler (id `"macaw-plug-client-ip-logger"`, handler `Macaw.Plug.ClientIp.log/4`) to two events. It logs an untrusted forward as a warning naming the peer, `"X-Forwarded-For from untrusted peer <peer>; if it is your proxy, add it to trusted_proxies"`, and a bad entry in a dynamic list (§3) as `"trusted_proxies: ignored <entry> (<reason>); fix the list it came from"`. Each event, separately:
 - **at most once per interval** on the node, `interval_ms` defaulting to one minute; the events between are dropped, not queued;
 - **the first event logs at once.** "Never logged" is one interval before the attach, not a fixed sentinel, because BEAM's monotonic clock can be negative (a fixed sentinel kept the first warning from ever firing; found and fixed in macaw_compose#43);
 - **concurrent events log once:** the last-logged time is advanced with compare-and-swap, so of two events in the same instant only one logs;
