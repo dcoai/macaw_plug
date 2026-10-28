@@ -17,8 +17,8 @@ plug Macaw.Plug.RateLimit, id: :site, rate: {10, :second}, burst: 50
 plug Macaw.Plug.SecurityHeaders
 ```
 
-Part of [Macaw](https://github.com/dcoai/macaw), whose spec lists it among the host libraries (spec/00 §4). Released by git tag:
+Part of [Macaw](https://github.com/dcoai/macaw), whose spec lists it among the host libraries (spec/00 §4). From Hex:
 
 ```elixir
-{:macaw_plug, git: "git@gitlab.conet.yarina.org:dco-tek/macaw_plug.git", tag: "v0.1.2"}
+{:macaw_plug, "~> 0.1.3"}
 ```
