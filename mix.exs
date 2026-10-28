@@ -21,7 +21,7 @@ defmodule Macaw.Plug.MixProject do
 
   def application, do: [extra_applications: [:logger]]
 
-  # Published on Hex from its public home, mirrored from GitLab (dco-tek/macaw_compose#155).
+  # Published on Hex from its public home, mirrored from GitLab (dco-tek/macaw/macaw_compose#155).
   defp package do
     [
       licenses: ["MIT"],
