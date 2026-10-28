@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 (2026-10-28)
 
 - The macaw logo in the docs and the README (macaw#175).
 - `Macaw.Plug.SecurityHeaders` options, all additive; with none, every header is as before (#1):

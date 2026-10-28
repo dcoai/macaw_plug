@@ -48,5 +48,5 @@ The full rules are in [spec/03](https://github.com/dcoai/macaw_plug/blob/main/sp
 Part of [Macaw](https://github.com/dcoai/macaw), whose spec lists it among the host libraries (spec/00 §4). From Hex:
 
 ```elixir
-{:macaw_plug, "~> 0.1.4"}
+{:macaw_plug, "~> 0.2.0"}
 ```
