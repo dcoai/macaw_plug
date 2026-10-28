@@ -1,0 +1,17 @@
+# Changelog
+
+## Unreleased
+
+- Package metadata for Hex: the public home, the changelog link, the files shipped, and docs with `ex_doc` (macaw_compose#155).
+
+## v0.1.2 (2026-10-27)
+
+- Adopt surfex; fix policy/2's empty script-src; v0.1.2 (part of macaw_compose#65)
+
+## v0.1.1 (2026-10-27)
+
+- macaw_plug 0.1.1: HSTS through headers:, hashes before the plug, dynamic proxy lists never raise
+
+## v0.1.0 (2026-10-26)
+
+- macaw_plug 0.1.0: ClientIp, RateLimit, SecurityHeaders
