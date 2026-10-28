@@ -1,6 +1,6 @@
 # macaw_plug specification
 
-`macaw_plug` holds the request guards every Macaw host application needs: the client's address behind trusted proxies, rate limiting, and security headers with a closed Content-Security-Policy. Each Macaw component has its own spec in its own repository (dco-tek/macaw_compose#61); this is `macaw_plug`'s. The family's overview, and where the host libraries sit in it, is in [macaw_compose 00 §4](https://gitlab.conet.yarina.org/dco-tek/macaw_compose/-/blob/main/spec/00-overview.md#overview-packaging).
+`macaw_plug` holds the request guards every Macaw host application needs: the client's address behind trusted proxies, rate limiting, and security headers with a closed Content-Security-Policy. Each Macaw component has its own spec in its own repository (dco-tek/macaw_compose#61); this is `macaw_plug`'s. The family's overview, and where the host libraries sit in it, is in [macaw_compose 00 §4](https://github.com/dcoai/macaw/blob/main/spec/00-overview.md#overview-packaging).
 
 | File | Covers | Status |
 |---|---|---|

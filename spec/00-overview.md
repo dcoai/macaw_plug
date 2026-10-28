@@ -15,7 +15,7 @@ It does not hold an authentication throttle. A request rate per key and exponent
 - **Test only:** `stream_data`, for the property tests.
 - **Elixir** 1.18 or newer; the `:logger` application.
 
-A host uses `macaw_plug` alone or beside `macaw_host` and `macaw_auth`; none of the composition libraries (`macaw_layers`, `macaw_data`, `macaw_compose`, `macaw_live`) depends on it ([macaw_compose 00 §4](https://gitlab.conet.yarina.org/dco-tek/macaw_compose/-/blob/main/spec/00-overview.md#overview-packaging)). It is released by git tag (v0.1.2).
+A host uses `macaw_plug` alone or beside `macaw_host` and `macaw_auth`; none of the composition libraries (`macaw_layers`, `macaw_data`, `macaw_compose`, `macaw_live`) depends on it ([macaw_compose 00 §4](https://github.com/dcoai/macaw/blob/main/spec/00-overview.md#overview-packaging)). It is released by git tag (v0.1.2).
 
 ## 3. Defaults are closed {#plug-closed}
 
