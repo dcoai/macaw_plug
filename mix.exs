@@ -15,7 +15,13 @@ defmodule Macaw.Plug.MixProject do
         "Request guards for Plug hosts: the client address behind trusted proxies, rate limiting, security headers.",
       source_url: @source_url,
       package: package(),
-      docs: [main: "readme", extras: ["README.md", "CHANGELOG.md"], source_ref: "v#{@version}"]
+      docs: [
+        main: "readme",
+        extras: ["README.md", "CHANGELOG.md"],
+        source_ref: "v#{@version}",
+        logo: "brand/logo/macaw_scarlet.svg",
+        assets: %{"brand/logo" => "brand/logo"}
+      ]
     ]
   end
 
