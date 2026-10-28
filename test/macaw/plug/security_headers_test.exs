@@ -6,6 +6,8 @@ defmodule Macaw.Plug.SecurityHeadersTest do
 
   alias Macaw.Plug.SecurityHeaders
 
+  doctest SecurityHeaders
+
   @closed "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " <>
             "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; " <>
             "form-action 'self'; frame-ancestors 'none'"
@@ -258,6 +260,183 @@ defmodule Macaw.Plug.SecurityHeadersTest do
         |> send_resp(200, "ok")
 
       assert header(conn, "content-security-policy") =~ SecurityHeaders.hash("early()")
+    end
+  end
+
+  describe "the options of #1" do
+    @compatible %{
+      "content-security-policy" => "base-uri 'self'; frame-ancestors 'self'",
+      "x-content-type-options" => "nosniff",
+      "referrer-policy" => "strict-origin-when-cross-origin",
+      "x-permitted-cross-domain-policies" => "none"
+    }
+
+    # Every header the plug may write, to see the ones it didn't.
+    @written [
+      "content-security-policy",
+      "content-security-policy-report-only",
+      "strict-transport-security",
+      "x-permitted-cross-domain-policies"
+      | @standard
+    ]
+
+    defp written(conn),
+      do: for(name <- @written, value = header(conn, name), into: %{}, do: {name, value})
+
+    @tag verifies: "headers-unknown-option"
+    test "an unknown option raises at init, naming it" do
+      assert_raise ArgumentError, ~r/\{:csp_mod, :off\} is not an option/, fn ->
+        SecurityHeaders.init(csp_mod: :off)
+      end
+    end
+
+    @tag verifies: "headers-hash-fallback"
+    test "a hash without a script-src follows default-src, or with neither writes none" do
+      hash = SecurityHeaders.hash("a()")
+      add = &SecurityHeaders.put_script_hash(&1, "a()")
+
+      assert header(run([preset: :compatible], add), "content-security-policy") ==
+               "base-uri 'self'; frame-ancestors 'self'"
+
+      assert header(
+               run([preset: :compatible, csp: [default_src: "'self'"]], add),
+               "content-security-policy"
+             ) ==
+               "base-uri 'self'; frame-ancestors 'self'; default-src 'self'; script-src 'self' #{hash}"
+
+      assert SecurityHeaders.policy([object_src: "'none'", default_src: "'none'", img_src: "x"], [
+               hash
+             ]) ==
+               "object-src 'none'; default-src 'none'; script-src 'none' #{hash}; img-src x"
+    end
+
+    @tag verifies: "headers-permissions-header-wins"
+    test "headers: replaces the rendered Permissions-Policy" do
+      conn = run(permissions: [geolocation: :self], headers: %{"permissions-policy" => "x=()"})
+      assert header(conn, "permissions-policy") == "x=()"
+
+      conn = run(permissions: [geolocation: :self], headers: %{"permissions-policy" => nil})
+      assert header(conn, "permissions-policy") == nil
+    end
+
+    @tag verifies: "headers-preset-compatible"
+    test "the compatible preset is Phoenix's set, plus HSTS over https" do
+      assert written(run(preset: :compatible)) == @compatible
+
+      assert written(run([preset: :compatible], & &1, :https)) ==
+               Map.put(@compatible, "strict-transport-security", "max-age=31536000")
+    end
+
+    @tag verifies: "headers-preset-on-top"
+    test "every option applies on top of the preset" do
+      conn = run(preset: :compatible, csp: [script_src: "'self'"])
+
+      assert header(conn, "content-security-policy") ==
+               "base-uri 'self'; frame-ancestors 'self'; script-src 'self'"
+
+      conn = run(preset: :compatible, permissions: [camera: :none])
+      assert header(conn, "permissions-policy") == "camera=()"
+      assert header(run(preset: :strict), "content-security-policy") == @closed
+    end
+
+    @tag verifies: "headers-preset-raises"
+    test "an unknown preset raises at init" do
+      assert_raise ArgumentError, "preset: :loose is not :strict or :compatible", fn ->
+        SecurityHeaders.init(preset: :loose)
+      end
+    end
+
+    @tag verifies: "headers-mode-report-only"
+    test "report-only sends the policy, hashes included, under the report-only header alone" do
+      conn = run([csp_mode: :report_only], &SecurityHeaders.put_script_hash(&1, "a()"))
+
+      assert header(conn, "content-security-policy-report-only") ==
+               SecurityHeaders.policy(SecurityHeaders.init([]).directives, [
+                 SecurityHeaders.hash("a()")
+               ])
+
+      assert header(conn, "content-security-policy-report-only") =~ SecurityHeaders.hash("a()")
+      assert header(conn, "content-security-policy") == nil
+
+      assert written(conn) |> Map.delete("content-security-policy-report-only") ==
+               written(run()) |> Map.delete("content-security-policy")
+    end
+
+    @tag verifies: "headers-mode-off"
+    test "off sends no policy header and every standard header" do
+      conn = run([csp_mode: :off], &SecurityHeaders.put_script_hash(&1, "a()"))
+      assert header(conn, "content-security-policy") == nil
+      assert header(conn, "content-security-policy-report-only") == nil
+      assert written(conn) == Map.delete(written(run()), "content-security-policy")
+      assert run(csp_mode: :enforce) |> header("content-security-policy") == @closed
+    end
+
+    @tag verifies: "headers-mode-raises"
+    test "an unknown mode raises at init" do
+      assert_raise ArgumentError, "csp_mode: :block is not :enforce, :report_only or :off", fn ->
+        SecurityHeaders.init(csp_mode: :block)
+      end
+    end
+
+    @tag verifies: "headers-permissions-replace"
+    test "a feature changes where it stands" do
+      assert header(run(permissions: [geolocation: :self]), "permissions-policy") ==
+               "camera=(), microphone=(), geolocation=(self), payment=(), usb=()"
+    end
+
+    @tag verifies: "headers-permissions-added"
+    test "a new feature follows the defaults, and nil removes one" do
+      assert header(run(permissions: [display_capture: :none, usb: nil]), "permissions-policy") ==
+               "camera=(), microphone=(), geolocation=(), payment=(), display-capture=()"
+    end
+
+    @tag verifies: "headers-permissions-allowlists"
+    test "allowlists: none, self, all, and a list of self and origins" do
+      assert SecurityHeaders.permissions_policy(
+               camera: [:self, "https://meet.example"],
+               microphone: :all,
+               usb: :none,
+               midi: ["http://localhost:4000"],
+               payment: []
+             ) ==
+               ~s(camera=\(self "https://meet.example"\), microphone=*, usb=\(\), ) <>
+                 ~s(midi=\("http://localhost:4000"\), payment=\(\))
+
+      assert SecurityHeaders.permissions_policy() == header(run(), "permissions-policy")
+
+      none =
+        for feature <- [:camera, :microphone, :geolocation, :payment, :usb], do: {feature, nil}
+
+      assert header(run(permissions: none), "permissions-policy") == nil
+      assert header(run(preset: :compatible), "permissions-policy") == nil
+    end
+
+    @tag verifies: "headers-permissions-raises"
+    test "an entry that isn't {feature, allowlist}, or a bad origin, raises naming it" do
+      for entry <- [
+            {"camera", :none},
+            {:"display-capture", :none},
+            {:camera, :everyone},
+            {:camera, [:self, :all]},
+            {:camera, "https://a.example"},
+            :camera
+          ] do
+        assert_raise ArgumentError,
+                     "permissions: #{inspect(entry)} is not {feature, allowlist}",
+                     fn ->
+                       SecurityHeaders.init(permissions: [entry])
+                     end
+      end
+
+      for origin <- ["https://a.example/path", "ftp://a.example", ~s(https://a"b), "https://"] do
+        assert_raise ArgumentError, ~r/is not an http\(s\) origin/, fn ->
+          SecurityHeaders.init(permissions: [camera: [origin]])
+        end
+
+        assert_raise ArgumentError, ~r/is not an http\(s\) origin/, fn ->
+          SecurityHeaders.permissions_policy(camera: [origin])
+        end
+      end
     end
   end
 end
